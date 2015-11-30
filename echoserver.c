@@ -12,6 +12,12 @@ do{ \
 	perror(m); \
 	exit(EXIT_FAILURE); \
 }while(0)
+//这里我们定义自己的包结构
+struct packet
+{
+	int len;//包头，里面存放的是实际的数据长度；
+	char buf[1024];
+};
 //首先我们要封装两个函数，readn（）和writen（）函数，我们将原型封装成和read和write函数一样
 ssize_t readn(int fd, void *buf, size_t count)
 {
@@ -58,21 +64,39 @@ size_t writen(int fd, const void *buf, size_t count)
 	}
 	return count-nleft;
 }
+//处理客户与服务器的通信
 void doServer(int connsocket, struct sockaddr_in cliaddr)
 {
-
-	char recvbuf[1024];
+	struct packet recvbuf;
+	int n;//计算包体的长度
 	while(1)
 	{
-		memset(recvbuf,0,sizeof(recvbuf));
-		int recvcount=readn(connsocket,recvbuf,sizeof(recvbuf));
-		if(recvcount==0)
+		memset(&recvbuf,0,sizeof(recvbuf));
+		int recvcount=readn(connsocket,&recvbuf.len,4);//要先接收4个字节的头部长度
+		if(recvcount==-1)
+		{
+			ERR_EXIT("readn");
+		}
+		else if(recvcount<4)//如果接收到的字节数不足4个字节，说明对方关闭了
 		{
 			printf("the client whose ip=%s,and port=%d,closed! \n",inet_ntoa(cliaddr.sin_addr),ntohs(cliaddr.sin_port));
 			break;
 		}
-		fputs(recvbuf,stdout);
-		writen(connsocket,recvbuf,recvcount);
+		//接下来就开始接收包体部分了；
+		n=ntohl(recvbuf.len);
+		recvcount=readn(connsocket,&recvbuf.buf,n);
+		if(recvcount==-1)
+		{
+			ERR_EXIT("readn");
+		}
+		else if(recvcount<n)
+		{
+			
+			printf("the client whose ip=%s,and port=%d,closed! \n",inet_ntoa(cliaddr.sin_addr),ntohs(cliaddr.sin_port));
+			break;
+		}
+		fputs(recvbuf.buf,stdout);
+		writen(connsocket,&recvbuf,4+n);//接下来就是回射回去
 	}
 }
 int main(void)

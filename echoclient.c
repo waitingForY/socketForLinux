@@ -12,7 +12,12 @@ do{ \
 	perror(m); \
 	exit(EXIT_FAILURE); \
 }while(0)
-
+//这里我们定义自己的包结构
+struct packet
+{
+	int len;//包头，里面存放的是实际的数据长度；
+	char buf[1024];
+};
 //首先我们要封装两个函数，readn（）和writen（）函数，我们将原型封装成和read和write函数一样
 ssize_t readn(int fd, void *buf, size_t count)
 {
@@ -82,16 +87,42 @@ int main(void)
 	{
 		ERR_EXIT("connect");
 	}
-	char sendbuf[1024]={0};
-	char recvbuf[1024]={0};
-	while(fgets(sendbuf,sizeof(sendbuf),stdin)!=NULL)
+	struct packet sendbuf;
+	struct packet recvbuf;
+	memset(&sendbuf,0,sizeof(sendbuf));
+	memset(&recvbuf,0,sizeof(recvbuf));
+	int n;
+
+	while(fgets(sendbuf.buf,sizeof(sendbuf.buf),stdin)!=NULL)
 	{
-		
-		writen(clientsocket,sendbuf,sizeof(sendbuf));//这里我们都发送定长包1024个字节
-		readn(clientsocket,recvbuf,sizeof(recvbuf));
-		fputs(recvbuf,stdout);
-		memset(sendbuf,0,sizeof(sendbuf));
-		memset(recvbuf,0,sizeof(recvbuf));
+		n=strlen(sendbuf.buf);
+		sendbuf.len=htonl(n);
+		writen(clientsocket,&sendbuf,4+n);//发送的是头部4个字节int len，再加上包体的长度n
+		int recvcount=readn(clientsocket,&recvbuf.len,4);//要先接收4个字节的头部长度
+		if(recvcount==-1)
+		{
+			ERR_EXIT("readn");
+		}
+		else if(recvcount<4)//如果接收到的字节数不足4个字节，说明对方关闭了
+		{
+			printf("peer close\n");
+			break;
+		}
+		//接下来就开始接收包体部分了；
+		n=ntohl(recvbuf.len);
+		recvcount=readn(clientsocket,&recvbuf.buf,n);
+		if(recvcount==-1)
+		{
+			ERR_EXIT("readn");
+		}
+		else if(recvcount<n)
+		{
+			printf("peer close\n");
+			break;
+		}	
+		fputs(recvbuf.buf,stdout);
+		memset(&sendbuf,0,sizeof(sendbuf));
+		memset(&recvbuf,0,sizeof(recvbuf));
 	}
 	close(clientsocket);
 	return 0;
