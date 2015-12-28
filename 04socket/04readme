@@ -1,0 +1,3 @@
+处理僵死进程的方法：
+1、利用忽略SIGCHLD信号的方式;signal(SIGCHLD,SIG_IGN);
+2、捕捉信号利用信号处理函数;signal(SIGCHLD,(sig_hander*));传入一个函数指针;这里这个sig_hander(int sig);这个函数就是信号的捕捉函数，里面调用wait函数，或者waitpid函数
